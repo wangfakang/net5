@@ -1,0 +1,127 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Net5 by wangfakang</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/github-light.css">
+    <script src="javascripts/scale.fix.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1 class="header">Net5</h1>
+        <p class="header">tcp fast open</p>
+
+        <ul>
+          <li class="download"><a class="buttons" href="https://github.com/wangfakang/net5/zipball/master">Download ZIP</a></li>
+          <li class="download"><a class="buttons" href="https://github.com/wangfakang/net5/tarball/master">Download TAR</a></li>
+          <li><a class="buttons github" href="https://github.com/wangfakang/net5">View On GitHub</a></li>
+        </ul>
+
+        <p class="header">This project is maintained by <a class="header name" href="https://github.com/wangfakang">wangfakang</a></p>
+
+
+      </header>
+      <section>
+        <p><code>TFO(Tcp Fast Open)的简单解析:</code></p>
+
+<p>今天简单看了些TFO相关的内容,下面作为记录:</p>
+
+<h1>
+<a id="tfo出现的背景" class="anchor" href="#tfo%E5%87%BA%E7%8E%B0%E7%9A%84%E8%83%8C%E6%99%AF" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>TFO出现的背景:</h1>
+
+<pre><code>
+    相信TCP三次握手的细节知识大家应该都很了解了.在说这个之前先说一下RTT的概念:     
+即一个数据包从发送到收到确认的这个时间就是一个RTT(即网络传输延时).            
+
+    当我们在发送http请求的时候就会先进行TCP的三次握手所以无法避免RTT.         
+
+    TFO说直白了就是在三次握手的过程中发送数据(在发送SYN包的时候携带应用层数据). 
+
+    虽然在http层面上有http keepalive,但是也会有35%的请求是重新发起一条连接[来自网络数据].    
+所以TFO在某些场景下还是很有必要的(如RTT很大的情况下)．         
+
+　　有个疑问为啥在http keepalive的情况下，还是会有请求重新进行发起连接,不知原因，希望各位解说．      
+</code></pre>
+
+<h1>
+<a id="tfo的实现原理" class="anchor" href="#tfo%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>TFO的实现原理:</h1>
+
+<p>　　TFO是在建立三次握手的过程中进行数据的发送，那是如何做的恩？其实是这样的：      </p>
+
+<ul>
+<li><p>１ 客户端发送SYN包，并在包的尾部加一个FOC请求，只有4个字节．</p></li>
+<li><p>２ 服务端受到FOC请求，验证后根据来源ip地址声称cookie(8个字节)，将这个COOKIE加载SYN+ACK包的末尾发送回去．</p></li>
+<li><p>３ 客户端缓存住获取到的Cookie 可以给下一次使用。</p></li>
+<li><p>４下一次请求开始，客户端发送SYN包，这时候后面带上缓存的COOKIE，然后就是正式发送的数据。</p></li>
+<li><p>５ 服务器端验证COOKIE正确，将数据交给上层应用处理得到相应结果，然后在发送SYN+ACK时，不再等待客户端的ACK确认，即开始发送相应数据</p></li>
+</ul>
+
+<h1>
+<a id="tfo带来的好处" class="anchor" href="#tfo%E5%B8%A6%E6%9D%A5%E7%9A%84%E5%A5%BD%E5%A4%84" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>TFO带来的好处:</h1>
+
+<p>　　　TFO带来的好处是不容置疑的：首先就是减少了RTT,尤其是在RTT比较大的场景下带来的性能提高是很大的．</p>
+
+<h1>
+<a id="tfo的不足之什么场景下使用" class="anchor" href="#tfo%E7%9A%84%E4%B8%8D%E8%B6%B3%E4%B9%8B%E4%BB%80%E4%B9%88%E5%9C%BA%E6%99%AF%E4%B8%8B%E4%BD%BF%E7%94%A8" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>TFO的不足之什么场景下使用:</h1>
+
+<p>TFO的就是在三次握手过程中就在syn包中携带数据进行数据的传输．那么就会有个问题：   </p>
+
+<ul>
+<li>1.可能会收到client重复的syn+data包（当server端未及时回复ack给clinet或者网络问题client就没有收到ack情况下）．
+那么问题就来了，竟然会收到重复的SYN那么重复的数据包也是肯定会收到的，所以某些场景下TFO还是不适应的．</li>
+</ul>
+
+<h1>
+<a id="communite--" class="anchor" href="#communite--" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Communite  </h1>
+
+<p>在使用中有任何问题，欢迎反馈给我，可以用以下联系方式跟我交流</p>
+
+<ul>
+<li>邮件(1031379296#qq.com, 把#换成@)</li>
+<li>QQ: 1031379296</li>
+<li>weibo: <a href="http://weibo.com/fakangwang">@王发康</a>
+</li>
+</ul>
+
+<h1>
+<a id="thx" class="anchor" href="#thx" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Thx</h1>
+
+<ul>
+<li>chunshengsterATgmail.com</li>
+</ul>
+
+<h1>
+<a id="author" class="anchor" href="#author" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Author</h1>
+
+<ul>
+<li>Linux\nginx\golang\c\c++爱好者</li>
+<li>欢迎一起交流  一起学习# </li>
+<li>Others say good and Others good</li>
+</ul>
+      </section>
+      <footer>
+        <p><small>Hosted on <a href="https://pages.github.com">GitHub Pages</a> using the Dinky theme</small></p>
+      </footer>
+    </div>
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+		          <script type="text/javascript">
+            var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+          </script>
+          <script type="text/javascript">
+            try {
+              var pageTracker = _gat._getTracker("TFO  tcp fast open");
+            pageTracker._trackPageview();
+            } catch(err) {}
+          </script>
+
+  </body>
+</html>
